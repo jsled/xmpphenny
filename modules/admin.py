@@ -10,7 +10,7 @@ http://inamidst.com/phenny/
 def join(phenny, input): 
    """Join the specified channel. This is an admin-only command."""
    # Can only be done in privmsg by an admin
-   if input.sender.startswith('#'): return
+   if input.is_groupchat_message: return
    if input.admin: 
       channel, key = input.group(1), input.group(2)
       if not key: 
@@ -23,7 +23,7 @@ join.example = '.join #example or .join #example key'
 def part(phenny, input): 
    """Part the specified channel. This is an admin-only command."""
    # Can only be done in privmsg by an admin
-   if input.sender.startswith('#'): return
+   if input.is_groupchat_message: return
    if input.admin: 
       phenny.write(['PART'], input.group(2))
 part.commands = ['part']
@@ -33,7 +33,7 @@ part.example = '.part #example'
 def quit(phenny, input): 
    """Quit from the server. This is an owner-only command."""
    # Can only be done in privmsg by the owner
-   if input.sender.startswith('#'): return
+   if input.is_groupchat_message: return
    if input.owner: 
       phenny.write(['QUIT'])
       __import__('os')._exit(0)
@@ -42,7 +42,7 @@ quit.priority = 'low'
 
 def msg(phenny, input): 
    # Can only be done in privmsg by an admin
-   if input.sender.startswith('#'): return
+   if input.is_groupchat_message: return
    a, b = input.group(2), input.group(3)
    if (not a) or (not b): return
    if input.admin: 
@@ -52,7 +52,7 @@ msg.priority = 'low'
 
 def me(phenny, input): 
    # Can only be done in privmsg by an admin
-   if input.sender.startswith('#'): return
+   if input.is_groupchat_message: return
    if input.admin: 
       msg = '\x01ACTION %s\x01' % input.group(3)
       phenny.msg(input.group(2), msg)

@@ -22,7 +22,7 @@ doc.priority = 'low'
 
 def commands(phenny, input): 
    # This function only works in private message
-   if input.sender.startswith('#'): return
+   if input.is_groupchat_message: return
    names = ', '.join(sorted(phenny.doc.iterkeys()))
    phenny.say('Commands I recognise: ' + names + '.')
    phenny.say(("For help, do '%s: help example?' where example is the " + 
@@ -51,6 +51,7 @@ def stats(phenny, input):
       if name in ignore: continue
       if not user: continue
 
+      # @FIXME:jsled:
       if not user.startswith('#'): 
          try: users[user] += count
          except KeyError: users[user] = count

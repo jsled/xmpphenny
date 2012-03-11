@@ -18,10 +18,12 @@ def load_database(name):
    if os.path.isfile(name): 
       f = open(name, 'rb')
       for line in f: 
-         unixtime, channel, nick, message = line.split('\t')
+         unixtime, channel, nick, is_groupchat_message, message = line.split('\t')
          message = message.rstrip('\n')
          t = int(unixtime)
-         reminder = (channel, nick, message)
+         gc = ('True'==is_groupchat_message)
+         reminder = (channel, nick, message, gc)
+         print 'loaded reminder with gc %s %s' % (gc, type(gc))
          try: data[t].append(reminder)
          except KeyError: data[t] = [reminder]
       f.close()
@@ -30,8 +32,8 @@ def load_database(name):
 def dump_database(name, data): 
    f = open(name, 'wb')
    for unixtime, reminders in data.iteritems(): 
-      for channel, nick, message in reminders: 
-         f.write('%s\t%s\t%s\t%s\n' % (unixtime, channel, nick, message))
+      for channel, nick, message, is_groupchat_message in reminders: 
+         f.write('%s\t%s\t%s\t%s\t%s\n' % (unixtime, channel, nick, is_groupchat_message, message))
    f.close()
 
 def setup(phenny): 
@@ -46,9 +48,10 @@ def setup(phenny):
          oldtimes = [t for t in unixtimes if t <= now]
          if oldtimes: 
             for oldtime in oldtimes: 
-               for (channel, nick, message) in phenny.rdb[oldtime]: 
-                  if message: 
-                     phenny.msg(channel, nick + ': ' + message)
+               for (channel, nick, message, is_groupchat_message) in phenny.rdb[oldtime]:
+                  print '%s %s' % (is_groupchat_message, type(is_groupchat_message))
+                  if message:
+                     phenny.msg(channel, is_groupchat_message, nick + ': ' + message)
                   else: phenny.msg(channel, nick + '!')
                del phenny.rdb[oldtime]
             dump_database(phenny.rfn, phenny.rdb)
@@ -116,7 +119,7 @@ def remind(phenny, input):
    else: duration = int(duration)
 
    t = int(time.time()) + duration
-   reminder = (input.sender, input.nick, message)
+   reminder = (input.sender, input.nick, message, input.is_groupchat_message)
 
    try: phenny.rdb[t].append(reminder)
    except KeyError: phenny.rdb[t] = [reminder]

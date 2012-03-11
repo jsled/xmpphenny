@@ -117,7 +117,7 @@ def getReminders(phenny, channel, key, tellee):
    return lines
 
 def message(phenny, input): 
-   if not input.sender.startswith('#'): return
+   if not input.is_groupchat_message: return
 
    tellee = input.nick
    channel = input.sender

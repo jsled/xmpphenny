@@ -14,20 +14,149 @@ home = os.getcwd()
 
 def decode(bytes): 
    try: text = bytes.decode('utf-8')
-   except UnicodeDecodeError: 
+   except UnicodeDecodeError:
       try: text = bytes.decode('iso-8859-1')
       except UnicodeDecodeError: 
          text = bytes.decode('cp1252')
    return text
 
-class Phenny(irc.Bot): 
-   def __init__(self, config): 
-      args = (config.nick, config.name, config.channels, config.password)
-      irc.Bot.__init__(self, *args)
+class IrcBot (irc.Bot):
+
+   def __init__(self, nick, name, channels, password, phenny):
+      irc.Bot.__init__(self, nick, name, channels, password)
+      self.phenny = phenny
+
+   def dispatch(self, origin, args):
+      self.phenny.dispatch(origin, args)
+
+   def msg(self, recipient, origin, msg):
+      irc.Bot.msg(self, recipient, msg)
+
+
+import warnings
+
+warnings.filterwarnings('ignore', 'the sha module is deprecated')
+warnings.filterwarnings('ignore', 'the md5 module is deprecated')
+
+from xmpp.client import Client
+from xmpp.protocol import JID, Message, Presence, NS_MUC
+import time
+
+class XmppBot (object):
+   def __init__(self, config, phenny):
+      self.config = config
+      self.phenny = phenny
+      # setup
+
+   def run(self):
+      # connect, join, &c.
+      # loop
+      print 'running xmpp bot'
+      self.jid = JID(self.config.xmpp_jid)
+      self.client = Client(self.jid.getDomain(), debug=[])
+
+      print 'connect',self.client.connect((self.config.host, self.config.port))
+      print 'auth',self.client.auth(self.jid.getNode(), self.config.xmpp_password, resource=self.config.nick)
+
+      self.client.RegisterHandler('message', self._message_cb)
+
+      for channel in self.config.channels:
+         muc_me = '%(channel)s/%(nick)s' % {'channel':channel, 'nick':self.config.nick}
+         p = Presence(to=muc_me)
+         p.setTag('x', namespace=NS_MUC) #.setTagData('password','')
+         id = self.client.send(p)
+         print 'sent presence id %s for channel %s' % (id,muc_me)
+
+      while 1:
+         self.client.Process(1)
+      
+   def _message_cb(self, session, msg):
+      # print u'got msg',msg.getBody()
+      class XmppOrigin (object):
+         def __init__(self):
+            self.nick = msg.getFrom().getResource()
+            self.user = msg.getFrom().getNode()
+            self.host = msg.getFrom().getDomain()
+            self.sender = msg.getFrom()
+            self.is_groupchat_message = (msg.getType() == 'groupchat')
+            self.msg = msg
+      origin = XmppOrigin()
+      args = (msg.getBody(), 'PRIVMSG', ())
+      # print u'dispatching', origin, args
+      self.phenny.dispatch(origin, args)
+
+   def msg(self, recipient, origin, text):
+      # print u'message to [%s]: [%s] was originally [%s]' % (recipient, text, str(origin))
+      msg_type = 'chat'
+      try:
+         if (type(origin) == type(True) and origin) \
+                or (origin and origin.msg.getType() == 'groupchat'):
+            msg_type = 'groupchat'
+      except:
+         print 'origin %s %s' % (type(origin),str(origin))
+      self.client.send(Message(recipient, text, typ=msg_type))
+
+   # def write(self, args, text=None): 
+   # def dispatch(self, origin, args):
+   # def msg(self, recipient, text): 
+   # def error(self, origin): 
+
+class Phenny (object):
+   def __init__(self, config):
+      self.useXmpp = False
+      try:
+         self.useXmpp = config.xmpp
+      except AttributeError:
+         pass
+      if self.useXmpp:
+         self.bot = XmppBot(config, self)
+      else:
+         self.bot = IrcBot(config.nick, config.name, config.channels, config.password, self)
       self.config = config
       self.doc = {}
       self.stats = {}
+
+      self.nick = config.nick
+      self.user = config.nick
+      self.name = config.name
+      self.password = config.password
+
+      self.verbose = True
+      self.channels = config.channels or []
+
       self.setup()
+
+   def run(self, host, port):
+      if self.useXmpp:
+         self.bot.run()
+      else:
+         self.bot.run(host, port)
+
+   def write(self, args, text=None):
+      print 'error: write called'
+      self.bot.write(args, text)
+
+   def msg(self, recipient, origin, text):
+      self.bot.msg(recipient, origin, text)
+
+   def error(self, origin): 
+      try: 
+         import traceback
+         trace = traceback.format_exc()
+         print trace
+         lines = list(reversed(trace.splitlines()))
+
+         report = [lines[0].strip()]
+         for line in lines: 
+            line = line.strip()
+            if line.startswith('File "/'): 
+               report.append(line[0].lower() + line[1:])
+               break
+         else: report.append('source unknown')
+
+         self.bot.msg(origin.sender, origin, report[0] + ' (' + report[1] + ')')
+      except:
+         self.bot.msg(origin.sender, origin, "Got an error.")
 
    def setup(self): 
       self.variables = {}
@@ -159,9 +288,11 @@ class Phenny(irc.Bot):
             sender = origin.sender or text
             if attr == 'reply': 
                return (lambda msg: 
-                  self.bot.msg(sender, origin.nick + ': ' + msg))
+                  self.bot.bot.msg(sender, origin, origin.nick + ': ' + msg))
             elif attr == 'say': 
-               return lambda msg: self.bot.msg(sender, msg)
+               return lambda msg: self.bot.bot.msg(sender, origin, msg)
+            elif attr == 'msg':
+               return lambda sender,msg: self.bot.bot.msg(sender, origin, msg)
             return getattr(self.bot, attr)
 
       return PhennyWrapper(self)
@@ -180,6 +311,7 @@ class Phenny(irc.Bot):
             s.args = args
             s.admin = origin.nick in self.config.admins
             s.owner = origin.nick == self.config.owner
+            s.is_groupchat_message = origin.is_groupchat_message
             return s
 
       return CommandInput(text, origin, bytes, match, event, args)
@@ -189,8 +321,8 @@ class Phenny(irc.Bot):
       except Exception, e: 
          self.error(origin)
 
-   def limit(self, origin, func): 
-      if origin.sender and origin.sender.startswith('#'): 
+   def limit(self, origin, func):
+      if origin.sender and origin.is_groupchat_message:
          if hasattr(self.config, 'limit'): 
             limits = self.config.limit.get(origin.sender)
             if limits and (func.__module__ not in limits): 

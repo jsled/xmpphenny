@@ -23,6 +23,7 @@ class Origin(object):
 
       mappings = {bot.nick: self.nick, None: None}
       self.sender = mappings.get(target, target)
+      self.is_groupchat_message = self.sender and self.sender.startswith('#')
 
 class Bot(asynchat.async_chat): 
    def __init__(self, nick, name, channels, password=None): 
@@ -163,24 +164,6 @@ class Bot(asynchat.async_chat):
 
    def notice(self, dest, text): 
       self.write(('NOTICE', dest), text)
-
-   def error(self, origin): 
-      try: 
-         import traceback
-         trace = traceback.format_exc()
-         print trace
-         lines = list(reversed(trace.splitlines()))
-
-         report = [lines[0].strip()]
-         for line in lines: 
-            line = line.strip()
-            if line.startswith('File "/'): 
-               report.append(line[0].lower() + line[1:])
-               break
-         else: report.append('source unknown')
-
-         self.msg(origin.sender, report[0] + ' (' + report[1] + ')')
-      except: self.msg(origin.sender, "Got an error.")
 
 class TestBot(Bot): 
    def f_ping(self, origin, match, args): 
