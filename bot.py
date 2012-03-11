@@ -43,6 +43,19 @@ from xmpp.protocol import JID, Message, Presence, NS_MUC
 import time
 
 class XmppBot (object):
+   '''In your ~/.phenny/default.py:
+
+       xmpp = True
+       xmpp_jid = 'phenny_bot@xmpp-host.example.com'
+       xmpp_password = 'super-s3kr1t'
+
+       # The following are then re-interpreted:
+       nick = 'groupchat-nick'
+       host = 'xmpp-host.example.com'
+       port = 5223 # or whatever
+       channels = [ '#phenny@conference.example.com', 'group-chat@conference.example.com' ]
+   ''' # '
+
    def __init__(self, config, phenny):
       self.config = config
       self.phenny = phenny
